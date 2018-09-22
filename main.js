@@ -88,7 +88,6 @@ function bindEvents() {
   });
 }
 
-
 function checkMarkersNearRoute(polyLine) {
   var checkMarkers = false;
   markers.forEach(marker => {
@@ -178,8 +177,6 @@ function handleMapClick(event) {
 }
 
 function placeMarker(location) {
-  var dynamicData = {};
-
   var marker = new google.maps.Marker({
     position: location,
     map: map
@@ -206,6 +203,8 @@ function placeMarker(location) {
   var infoWindow = new google.maps.InfoWindow({
     content: contentString
   });
+
+  map.setCenter(location);
 
   infoWindow.open(map, marker);
 
@@ -260,7 +259,6 @@ function geolocate() {
   }
 }
 
-
 function fillInAddress() {
   // Get the place details from the autocomplete object.
   var place = autocomplete.getPlace();
@@ -288,5 +286,4 @@ function submitForm() {
   infoWindow.close();
   saveNewMarkerToDB(JSON.stringify(dynamicData));
   readyToAddMarker = false;
-
 }
