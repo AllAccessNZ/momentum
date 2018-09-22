@@ -1,11 +1,28 @@
+var map,
+  infoWindow,
+  markers = [],
+  readyToAddMarker = false,
+  dirService,
+  dirRenderer,
+  contentString = "",
+  myLocation,
+  autocomplete,
+  request,
+  markerLocation;
+
 function initMap() {
-  var map,
-    infoWindow,
-    markers = [],
-    readyToAddMarker = false,
-    dirService,
-    dirRenderer,
-    contentString = "";
+  // The map, centered at Uluru
+  map = new google.maps.Map(document.getElementById("map"), {
+    zoom: 15,
+    center: { lat: 48.1252, lng: 11.5407 }
+  });
+
+  autocomplete = new google.maps.places.Autocomplete(
+    /** @type {!HTMLInputElement} */ (document.getElementById("autocomplete")),
+    { types: ["geocode"] }
+  );
+
+  map.setCenter(returnUserLocation());
 
   // THe info window content
   contentString =
@@ -14,7 +31,7 @@ function initMap() {
     "</div>" +
     '<h1 id="firstHeading" class="firstHeading">Uluru</h1>' +
     '<div id="bodyContent">' +
-    "<p><b>Uluru</b>, also referred to as <b>Ayers Rock</b>, is a large " +
+    "<textarea><b>Uluru</b>, also referred to as <b>Ayers Rock</b>, is a large " +
     "sandstone rock formation in the southern part of the " +
     "Northern Territory, central Australia. It lies 335&#160;km (208&#160;mi) " +
     "south west of the nearest large town, Alice Springs; 450&#160;km " +
@@ -23,220 +40,253 @@ function initMap() {
     "sacred to the Pitjantjatjara and Yankunytjatjara, the " +
     "Aboriginal people of the area. It has many springs, waterholes, " +
     "rock caves and ancient paintings. Uluru is listed as a World " +
-    "Heritage Site.</p>" +
+    "Heritage Site.</textarea>" +
     '<p>Attribution: Uluru, <a href="https://en.wikipedia.org/w/index.php?title=Uluru&oldid=297882194">' +
     "https://en.wikipedia.org/w/index.php?title=Uluru</a> " +
     "(last visited June 22, 2009).</p>" +
     "</div>" +
     "</div>";
 
-  // The map, centered at Uluru
-  map = new google.maps.Map(document.getElementById("map"), {
-    zoom: 15,
-    center: { lat: 48.1252, lng: 11.5407 }
-  });
-
   //The info window
   infoWindow = new google.maps.InfoWindow({ content: contentString });
 
   dirService = new google.maps.DirectionsService();
   var dirRenderer = new google.maps.DirectionsRenderer({
+    draggable: true,
     suppressMarkers: true
   });
 
   dirRenderer.setMap(map);
   placeDBMarkerOnMap();
 
-  $("#addMarkerButton").click(function() {
-    readyToAddMarker = true;
-  });
-
-  //Add event handler to a map click
-  map.addListener("click", event => {
-    if (readyToAddMarker) {
-      handleMapClick(event);
-      console.log(readyToAddMarker);
-    } else {
-      console.log(readyToAddMarker);
-    }
-    infoWindow.close();
-  });
-
-  var request = {
+  request = {
     origin: "-36.850955, 174.757425",
     destination: "-36.854612, 174.745891",
     travelMode: google.maps.TravelMode.WALKING,
     provideRouteAlternatives: true
   };
 
-  function checkMarkersNearRoute(polyLine) {
-    var checkMarkers = false;
-    markers.forEach(marker => {
-      var latLng = new google.maps.LatLng(
-        marker.position.lat(),
-        marker.position.lng()
-      );
-      if (google.maps.geometry.poly.isLocationOnEdge(latLng, polyLine, 0.001)) {
-        checkMarkers = true;
-      }
-    });
-    return checkMarkers;
-  }
+  bindEvents();
+}
 
-  //Place all markers on the
-  function placeDBMarkerOnMap() {
-    $.get("http://localhost/Wheels/api/marker/read.php", function(data) {
-      if (data.message === "No markers found.") {
-        console.log(data);
-      } else {
-        data.records.forEach(object => {
-          var marker = new google.maps.Marker({
-            position: new google.maps.LatLng(object.lat, object.lng),
-            map: map
-          });
+function bindEvents() {
+  autocomplete.addListener("place_changed", fillInAddress);
 
-          marker.addListener("click", function() {
-            infoWindow.open(map, marker);
-          });
+  $("#autocomplete").focus(geolocate());
 
-          markers.push(marker);
-          console.log(markers);
+  //Add event handler to a map click
+  map.addListener("click", event => {
+    if (readyToAddMarker) {
+      handleMapClick(event);
+    } else {
+    }
+    infoWindow.close();
+  });
+
+  $("#addMarkerButton").click(function() {
+    readyToAddMarker = true;
+  });
+}
+
+
+function checkMarkersNearRoute(polyLine) {
+  var checkMarkers = false;
+  markers.forEach(marker => {
+    var latLng = new google.maps.LatLng(
+      marker.position.lat(),
+      marker.position.lng()
+    );
+    if (google.maps.geometry.poly.isLocationOnEdge(latLng, polyLine, 0.001)) {
+      checkMarkers = true;
+    }
+  });
+  return checkMarkers;
+}
+
+function placeDBMarkerOnMap() {
+  $.get("http://localhost/Wheels/api/marker/read.php", function(data) {
+    if (data.message === "No markers found.") {
+      console.log(data);
+    } else {
+      data.records.forEach(object => {
+        var marker = new google.maps.Marker({
+          position: new google.maps.LatLng(object.lat, object.lng),
+          map: map
         });
-      }
 
-      dirService.route(request, function(result, status) {
-        if (status == google.maps.DirectionsStatus.OK) {
-          var x = 0,
-            shortestAllowedRouteIndex = 0,
-            shortestAloowedRouteDistance = 0;
+        marker.addListener("click", function() {
+          infoWindow.open(map, marker);
+        });
 
-          for (x; x < result.routes.length; x++) {
-            var distance = 0,
-              path;
+        markers.push(marker);
+        console.log(markers);
+      });
+    }
 
-            distance = result.routes[x].legs[0].distance.value;
+    dirService.route(request, function(result, status) {
+      if (status == google.maps.DirectionsStatus.OK) {
+        var x = 0,
+          shortestAllowedRouteIndex = 0,
+          shortestAloowedRouteDistance = 0;
 
-            path = result.routes[x].overview_path;
+        for (x; x < result.routes.length; x++) {
+          var distance = 0,
+            path;
 
-            var polyLine = new google.maps.Polyline({
-              path: path,
-              geodesic: true,
-              strokeColor: "#FF0000",
-              strokeOpacity: 1.0,
-              strokeWeight: 2
-            });
+          distance = result.routes[x].legs[0].distance.value;
 
-            //Make sure one distance is selected
-            if (shortestAloowedRouteDistance == 0) {
-              shortestAloowedRouteDistance = distance;
-            }
+          path = result.routes[x].overview_path;
 
-            //Check if any icons close to polyline
-            if (checkMarkersNearRoute(polyLine)) {
-              console.log("Route one too close to icon");
-            } else {
-              console.log("Route is okay");
-              //Check if new route has the lowest distance
-              if (shortestAloowedRouteDistance > distance) {
-                shortestAloowedRouteDistance = distance;
-                shortestAllowedRouteIndex = x;
-              }
-            }
+          var polyLine = new google.maps.Polyline({
+            path: path,
+            geodesic: true,
+            strokeColor: "#FF0000",
+            strokeOpacity: 1.0,
+            strokeWeight: 2
+          });
+
+          //Make sure one distance is selected
+          if (shortestAloowedRouteDistance == 0) {
+            shortestAloowedRouteDistance = distance;
           }
 
-          new google.maps.DirectionsRenderer({
-            map: map,
-            directions: result,
-            routeIndex: shortestAllowedRouteIndex
-          });
+          //Check if any icons close to polyline
+          if (checkMarkersNearRoute(polyLine)) {
+            console.log("Route one too close to icon");
+          } else {
+            console.log("Route is okay");
+            //Check if new route has the lowest distance
+            if (shortestAloowedRouteDistance > distance) {
+              shortestAloowedRouteDistance = distance;
+              shortestAllowedRouteIndex = x;
+            }
+          }
         }
-      });
-    });
-  }
 
-  //Handle a map click event
-  function handleMapClick(event) {
-    console.log("Handlemapclicked");
-    placeMarker(event.latLng);
-  }
-
-  //Takes a location of latLng as input. Place a marker at that location
-  function placeMarker(location) {
-    var dynamicData = {};
-    var marker = new google.maps.Marker({
-      position: location,
-      map: map
-    });
-    marker.addListener("click", function() {
-      infoWindow.open(map, marker);
-    });
-    markers.push(marker);
-
-    ////////////PLACEHOLDER VALUES TILL WE PROMPT USER INPUT////////////
-    dynamicData["user_id"] = 1;
-    dynamicData["name"] = "Test Name";
-    dynamicData["address"] = "Test Address";
-    dynamicData["description"] = "Test Description";
-    dynamicData["type"] = "Test Type";
-    dynamicData["lat"] = location.lat();
-    dynamicData["lng"] = location.lng();
-
-    saveNewMarkerToDB(JSON.stringify(dynamicData));
-    readyToAddMarker = false;
-  }
-
-  //Take json coded marker data and attempts to save in database
-  function saveNewMarkerToDB(dynamicData) {
-    // submit form data to api
-    $.ajax({
-      url: "http://localhost/Wheels/api/marker/create.php",
-      type: "POST",
-      contentType: "application/json",
-      data: dynamicData,
-      success: function(result) {
-        // product was created, go back to products list
-        console.log("added successfully");
-      },
-      error: function(xhr, resp, text) {
-        // show error to console
-        console.log(xhr, resp, text);
+        new google.maps.DirectionsRenderer({
+          map: map,
+          directions: result,
+          routeIndex: shortestAllowedRouteIndex
+        });
       }
     });
-  }
+  });
+}
 
-  //Center map on device GPS location
-  function navigateToCurrentLocation() {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        function(position) {
-          var pos = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
+function handleMapClick(event) {
+  placeMarker(event.latLng);
+}
 
-          infoWindow.setPosition(pos);
-          infoWindow.setContent("Location found.");
-          infoWindow.open(map);
-          map.setCenter(pos);
-        },
-        function() {
-          handleLocationError(true, infoWindow, map.getCenter());
-        }
-      );
-    } else {
-      // Browser doesn't support Geolocation
-      handleLocationError(false, infoWindow, map.getCenter());
+function placeMarker(location) {
+  var dynamicData = {};
+
+  var marker = new google.maps.Marker({
+    position: location,
+    map: map
+  });
+
+  marker.addListener("click", function() {
+    infoWindow.open(map, marker);
+  });
+
+  contentString =
+    '<div id="newMarkerForm">' +
+    '<input id="nameInput" placeholder="Name" type="text"></input>' +
+    '<input id="description" placeholder="Desciption" type="text"></input>' +
+    "<span>Catergory</span>" +
+    '<select name="catergories">' +
+    '<option value="1">1</option>' +
+    '<option value="2">2</option>' +
+    '<option value="3">3</option>' +
+    '<option value="4">4</option>' +
+    "</select>" +
+    "<button id='addinfobutton' onClick='submitForm()'>Add Marker</button>" +
+    "</div>";
+
+  var infoWindow = new google.maps.InfoWindow({
+    content: contentString
+  });
+
+  infoWindow.open(map, marker);
+
+  markers.push(marker);
+
+  markerLocation = location;
+}
+
+function saveNewMarkerToDB(dynamicData) {
+  // submit form data to api
+  $.ajax({
+    url: "http://localhost/Wheels/api/marker/create.php",
+    type: "POST",
+    contentType: "application/json",
+    data: dynamicData,
+    success: function(result) {
+      // product was created, go back to products list
+      console.log("added successfully");
+    },
+    error: function(xhr, resp, text) {
+      // show error to console
+      console.log(xhr, resp, text);
     }
+  });
+}
+//Return a position with client info
+function returnUserLocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(position) {
+      var pos = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+      return pos;
+    });
   }
+}
 
-  //Handle error of not being able to locate device
-  function handleLocationError(browserHasGeolocation, infoWindow, pos) {
-    infoWindow.setPosition(pos);
-    infoWindow.setContent(
-      browserHasGeolocation
-        ? "Error: The Geolocation service failed."
-        : "Error: Your browser doesn't support geolocation."
-    );
-    infoWindow.open(map);
+function geolocate() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(position) {
+      var geolocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+      var circle = new google.maps.Circle({
+        center: geolocation,
+        radius: position.coords.accuracy
+      });
+      autocomplete.setBounds(circle.getBounds());
+    });
   }
+}
+
+
+function fillInAddress() {
+  // Get the place details from the autocomplete object.
+  var place = autocomplete.getPlace();
+  console.log(place);
+  placeMarker(place.geometry.location);
+  map.setCenter();
+
+  document.getElementById("autocomplete").value = "";
+  // document.getElementById(component).disabled = false;
+
+  // Get each component of the address from the place details
+  // and fill the corresponding field on the form.
+}
+
+function submitForm() {
+  var dynamicData = {};
+  ////////////PLACEHOLDER VALUES TILL WE PROMPT USER INPUT////////////
+  dynamicData["user_id"] = 1;
+  dynamicData["name"] = "Test Name";
+  dynamicData["address"] = "Test Address";
+  dynamicData["description"] = "Test Description";
+  dynamicData["type"] = "Test Type";
+  dynamicData["lat"] = markerLocation.lat();
+  dynamicData["lng"] = markerLocation.lng();
+  infoWindow.close();
+  saveNewMarkerToDB(JSON.stringify(dynamicData));
+  readyToAddMarker = false;
+
 }
