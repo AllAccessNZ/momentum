@@ -22,8 +22,8 @@ function initMap() {
     { types: ["geocode"] }
   );
 
-  map.setCenter(returnUserLocation());
-
+  centerToCurLocation(map);
+  
   // THe info window content
   contentString =
     '<div id="content">' +
@@ -74,7 +74,7 @@ function bindEvents() {
 
   $("#autocomplete").focus(geolocate());
 
-  //Add event handler to a map click
+  // Add event handler to a map click
   map.addListener("click", event => {
     if (readyToAddMarker) {
       handleMapClick(event);
@@ -149,7 +149,6 @@ function placeDBMarkerOnMap() {
           if (shortestAloowedRouteDistance == 0) {
             shortestAloowedRouteDistance = distance;
           }
-
           //Check if any icons close to polyline
           if (checkMarkersNearRoute(polyLine)) {
             console.log("Route one too close to icon");
@@ -162,7 +161,6 @@ function placeDBMarkerOnMap() {
             }
           }
         }
-
         new google.maps.DirectionsRenderer({
           map: map,
           directions: result,
@@ -232,18 +230,20 @@ function saveNewMarkerToDB(dynamicData) {
     }
   });
 }
-//Return a position with client info
-function returnUserLocation() {
+// Return a position with client info
+function centerToCurLocation(map) {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(position) {
       var pos = {
         lat: position.coords.latitude,
         lng: position.coords.longitude
       };
-      return pos;
+      map.setCenter(pos);
+      // return pos;
     });
   }
 }
+
 
 function geolocate() {
   if (navigator.geolocation) {
@@ -260,7 +260,6 @@ function geolocate() {
     });
   }
 }
-
 
 function fillInAddress() {
   // Get the place details from the autocomplete object.
@@ -289,5 +288,4 @@ function submitForm() {
   infoWindow.close();
   saveNewMarkerToDB(JSON.stringify(dynamicData));
   readyToAddMarker = false;
-
 }
