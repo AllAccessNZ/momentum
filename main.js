@@ -7,6 +7,50 @@ function initMap() {
     dirRenderer,
     contentString = "";
 
+  autocomplete = new google.maps.places.Autocomplete(
+    /** @type {!HTMLInputElement} */ (document.getElementById("autocomplete")),
+    { types: ["geocode"] }
+  );
+
+  // When the user selects an address from the dropdown, populate the address
+  // fields in the form.
+  autocomplete.addListener("place_changed", fillInAddress);
+
+  function fillInAddress() {
+    // Get the place details from the autocomplete object.
+    var place = autocomplete.getPlace();
+    console.log(place);
+    placeMarker(place.geometry.location);
+    map.setCenter(place.geometry.location);
+
+    document.getElementById("autocomplete").value = "";
+    // document.getElementById(component).disabled = false;
+
+    // Get each component of the address from the place details
+    // and fill the corresponding field on the form.
+  }
+
+  // Bias the autocomplete object to the user's geographical location,
+  // as supplied by the browser's 'navigator.geolocation' object.
+
+  $("#autocomplete").focus(geolocate());
+
+  function geolocate() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(position) {
+        var geolocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        var circle = new google.maps.Circle({
+          center: geolocation,
+          radius: position.coords.accuracy
+        });
+        autocomplete.setBounds(circle.getBounds());
+      });
+    }
+  }
+
   // THe info window content
   contentString =
     '<div id="content">' +
@@ -27,6 +71,7 @@ function initMap() {
     '<p>Attribution: Uluru, <a href="https://en.wikipedia.org/w/index.php?title=Uluru&oldid=297882194">' +
     "https://en.wikipedia.org/w/index.php?title=Uluru</a> " +
     "(last visited June 22, 2009).</p>" +
+    "<button></button>" +
     "</div>" +
     "</div>";
 
@@ -82,7 +127,7 @@ function initMap() {
     });
     return checkMarkers;
   }
-
+  function createRoute(locations) {}
   //Place all markers on the
   function placeDBMarkerOnMap() {
     $.get("http://localhost/Wheels/api/marker/read.php", function(data) {
